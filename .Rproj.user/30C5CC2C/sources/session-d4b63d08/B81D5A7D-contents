@@ -1,0 +1,106 @@
+library(plm)
+library(pdynmc)
+library(readxl)
+
+#     Loading Data
+
+
+
+#View(Regional)
+m1 <- pdynmc(dat =pdata, 
+             varname.i = "ID", 
+             varname.t = "Year",
+             use.mc.diff = TRUE # instruments in levels should be used
+             ,use.mc.lev = TRUE #instruments in differences should be used 
+             ,use.mc.nonlin = FALSE #whether nonlinear (quadratic) moment conditions should be used
+             ,inst.stata=FALSE
+             ,include.y = TRUE, 
+             varname.y = "GDP_Growth" #the independent variable 
+             ,lagTerms.y = 1 #indicating the number of lags of the dependent variable used as explanatory variables.
+             ,maxLags.y =5 #the maximum number of lags of the dependent variable from which instruments should be derived.
+             ,fur.con = TRUE, 
+             fur.con.diff = TRUE, 
+             fur.con.lev = TRUE,
+             varname.reg.fur = c("ROA", "equity_ratio","Population","share_non_interest_inc", "CPI_pct_change" ),
+             lagTerms.reg.fur = c(0,0,0,0,0),
+             include.dum = TRUE #time dummy variables
+             ,dum.diff = TRUE 
+             ,dum.lev = TRUE
+             ,varname.dum = "Year" #which time dummies should be derived  
+             ,w.mat = "iid.err"
+             ,w.mat.stata=TRUE,
+             ,std.err = "corrected", 
+             estimation = "twostep"
+             ,opt.meth = "none")
+#############
+summary(m1)
+mtest.fct(m1, order=2)
+
+
+#.............EXTRACTING INFORMATION........
+
+# Extract Coef???cient Estimates of Fitted Model.
+coef(m1)
+
+# Extract Coef???cient Estimates of Time Dummies of Fitted Model.
+dummy.coef(m1)
+
+# Extract Fitted Values of Fitted Model.
+fitted(m1, step = "2", na.rm = FALSE)
+
+# Extract Instrument Matrix of Fitted Model.
+model.matrix(m1, sparse = TRUE)
+
+# Extract Instrument Count of Fitted Model.
+ninst(m1)
+
+# Extract Number of Observations of Fitted Model.
+nobs(m1)
+
+# Extract Residuals of Fitted Model.
+residuals(m1, na.rm = TRUE)
+
+#Extract Variance Covariance Matrix of Fitted Model.
+vcov(m1, step = "2")
+
+#Extract Weighting Matrix of Fitted Model.
+wmat(m1, step = 2) # step 1 if you specify onestep GMM
+
+
+# Extract Input Parameters of Numeric Optimization of Fitted Model.
+optimIn(m2) #if you carried a Numerical optimization
+
+#....................Ploting ......................
+
+# Plot Coef???cient Estimates and Corresponding Ranges of Fitted Model.
+
+plot(m1)
+plot(m1, type = "coef.range")
+plot(m1, type = "coef.path")
+
+#Plot on Structure of Unbalanced Panel Data Set.
+strucUPD.plot(dat2, i.name = "ID", t.name = "Year")
+
+
+
+#....................TESTS.................
+
+#Arrelano and Bond (1991) serial correlation test of degree 1 
+mtest.fct(m1, )
+
+
+# Arrelano and Bond (1991) serial correlation test of degree 1
+mtest.fct(m1, order=2)
+
+# Hansen J-Test.
+jtest.fct(m1)
+
+
+# Wald Test.
+wald.fct(param="all", m1)
+
+
+
+
+
+

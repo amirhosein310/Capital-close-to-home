@@ -1,0 +1,72 @@
+# initial model for estimation
+library(plm)
+library(pdynmc)
+
+pdata <- pdata.frame(main_dataframe, index = c("ID", "Year"))
+
+main_dataframe <- main_dataframe[!duplicated(main_dataframe[, c("ID", "Year")]), ]
+# Remove rows with NA in ID or Year
+main_dataframe <- main_dataframe[!is.na(main_dataframe$ID) & !is.na(main_dataframe$Year), ]
+# Ensure ID and Year are the correct types
+main_dataframe$ID <- as.character(main_dataframe$ID)  # Convert ID to character
+main_dataframe$Year <- as.numeric(main_dataframe$Year)  # Convert Year to numeric
+
+# limit the time frame to 2007 - 2022
+pdata$Year <- as.numeric(as.character(pdata$Year))
+pdata <- pdata[pdata$Year >= 2012 & pdata$Year <= 2022, ]
+
+
+pdata$GDP_per_capita <- pdata$GDP_per_capita/1000
+pdata$Population <- pdata$Population/10
+#simple model
+data_clean <- na.omit(pdata)
+# Run the GMM estimation
+
+gmm_model <- pgmm(
+  formula = GDP_Growth ~ lag(GDP_Growth, 1) + ROA + log(total_assets) + CPI_pct_change + share_non_interest_inc
+  + Population + equity_ratio    | lag(GDP_Growth, 2) + lag(ROE, 2)      ,  # Instruments
+  
+  data = pdata,
+  effect = "twoway",   # Fixed effects
+  model = "twostep",     # Two-step GMM
+  transformation = "ld",
+  #robust = FALSE 
+  #system gmm
+)
+# Display the results
+summary(gmm_model)
+
+
+# gpt
+# Load necessary library
+
+# Ensure your panel data is formatted correctly
+# Replace 'your_data' with the actual name of your dataset
+
+# Define the formula for the System GMM estimation
+formula <- GDP_Growth ~ lag(GDP_Growth, 1) + ROE + log(total_assets) + 
+  CPI_pct_change + share_non_interest_inc + Population + equity_ratio + 
+  GDP_per_capita  | lag(GDP_Growth, 2:5) + lag(ROE, 1)
+
+# Perform the System GMM estimation with time effects only
+system_gmm_model <- pgmm(
+  formula = formula,
+  data = pdata,
+  effect = "twoways",            # Only include time effects
+  model = "twosteps",         # Two-step estimator for efficiency
+  transformation = "d",       # Use system GMM (level and difference equations)
+  collapse = TRUE
+  
+)
+
+# Display the summary with time dummies
+summary(system_gmm_model, robust = TRUE, time.dummies = TRUE)
+
+
+
+
+pdatae <- pdata[pdata$former_east == 1, ]
+
+
+
+

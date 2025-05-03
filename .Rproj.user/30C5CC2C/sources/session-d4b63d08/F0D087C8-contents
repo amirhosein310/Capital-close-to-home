@@ -1,0 +1,182 @@
+
+# Load required library
+library(rio)
+library(dplyr)
+library(stargazer)
+
+# Load datasets
+setwd("H:/Confilience/main")
+snl_flow <- read.csv("snl_flowperiod-001.csv")
+snl_inst <- read.csv("snl_institutionals.csv")
+snl_stock <- read.csv("snl_stockperiod.csv")
+
+
+
+
+# Filter institutions that have zip codes and are located in Germany (country code 76)
+address_sample <- snl_inst[complete.cases(snl_inst$zipcode),]
+address_sample <- address_sample[address_sample$countryid == 76,]
+
+# Create a dataframe of unique institutions based on institutionid, name, zipcode, and countryid
+df <- unique(data.frame(address_sample$institutionid, address_sample$institutionname, address_sample$zipcode, address_sample$countryid))
+
+# Filter institutions in df that are also in snl_stock
+df <- df[which(df$address_sample.institutionid %in% snl_stock$institutionid),]
+
+# Merge snl_stock with df to add institution details (name, zipcode, country)
+add_df <- merge(snl_stock, df, by.x="institutionid", by.y="address_sample.institutionid", all.x = TRUE, all.y = FALSE)
+
+# Remove rows with missing institution names
+add_df <- add_df[complete.cases(add_df$address_sample.institutionname),]
+
+# Reorder columns in add_df
+add_df <- add_df[, c(1, 177, 178, 179, 2:176)]
+
+# Filter institutions whose names contain "sparkasse" (case insensitive)
+add_df_sk <- add_df[grep("sparkasse", add_df$address_sample.institutionname, ignore.case = TRUE),]
+
+# clean the sk data from unrelated firms (BauSparkassen and Insurance firms)
+remove_sk <- c(4257334, 4145319, 4145337, 4222342, 4242171, 4377775, 4257366,
+               4400665, 4245465, 4399809, 4403782, 4245471, 4876783, 4245472,
+               4179778, 4425880, 4431429, 4387116, 4760805, 7785316, 4327013,
+               4382500, 4258346, 4569822, 4537820, 4383045, 4138879, 4257337,
+               4606041, 4629110)
+
+
+unique(add_df_sk$address_sample.institutionname[add_df_sk$institutionid%in%remove_sk[remove_sk==remove_sk[1]]])
+
+# Keep 4431429 4387116 4569822 4537820 4383045 4138879 4606041 4629110
+
+remove_sk <- c(4257334, 4145319, 4145337, 4222342, 4242171, 4377775, 4257366,
+               4400665, 4245465, 4399809, 4403782, 4245471, 4876783, 4245472,
+               4179778, 4425880, 4760805, 7785316, 4327013,
+               4382500, 4258346, 4257337)
+
+also_remove <- c(4406059, 4431479)
+# Aachener Bausparkasse AG
+# Deutsche Bausparkasse Badenia AG
+
+removed <- c(4431429, 4387116, 4569822, 4537820, 4383045, 4138879, 4606041, 4629110)
+
+remove_sk <- c(remove_sk, also_remove)
+
+add_df_sk <- add_df_sk %>%
+
+install_formats("json")
+
+mapping <- import("snl_codenames.json")
+
+mapping
+# Create a named vector for renaming based on the 'mapping' data frame
+name_mapping <- setNames(mapping$Description, mapping$`Variable Name`)
+
+# Only rename columns that are present in both the original data frame and the mapping
+names(add_df_sk)[names(add_df_sk) %in% names(name_mapping)] <- name_mapping[names(add_df_sk)[names(add_df_sk) %in% names(name_mapping)]]
+
+# Check the new names
+names(add_df_sk)
+
+sort(unique(add_df_sk$`Period End Date (periodEndDate)`))
+
+# summary function to generate latex output
+summary_latex <- function(data, variables, title = "Summary Statistics") {
+  selected_columns <- data[, variables, drop = FALSE]
+  # generate latex code
+  stargazer(selected_columns, 
+            type = "latex", 
+            summary = TRUE, 
+            title = title)
+}
+
+# Generate summary statics
+#variables <- c( "var_133175","var_133176", "var_133116", "var_133171", "var_138553")
+variables <- names(add_df_sk[10:176])
+summary_latex(add_df, variables, title = "Summary Statistics") #summary for all institutions
+summary_latex(add_df_sk, variables, title = "Summary Statistics") # summary for Sparkassen
+
+################################################################################
+
+# Load and clean the postal code mapping file
+plz_mapping <- import("georef-germany-postleitzahl.xlsx")
+
+# Drop the Geometry column
+plz_mapping$Geometry <- NULL
+
+# Rename and clean up Kreis code (district code) column
+plz_mapping$ao_kreis <- plz_mapping$`Kreis code`
+plz_mapping$`Kreis code` <- NULL
+plz_mapping$ao_kreis <- sub("^0+", "", plz_mapping$ao_kreis)  # Remove leading zeros
+plz_mapping$ao_kreis <- as.numeric(plz_mapping$ao_kreis)      # Convert to numeric
+
+# Rename postal code column
+plz_mapping$plz <- plz_mapping$`Postleitzahl / Post code`
+
+# Merge Sparkasse institutions with postal code mapping
+add_df_sk_ak <- merge(add_df_sk, plz_mapping, by.x="address_sample.zipcode", by.y="plz", all.x = TRUE, all.y = FALSE)
+
+# Split geo_point_2d into latitude and longitude columns
+add_df_sk_ak[c("lat", "lon")] <- do.call(rbind, strsplit(add_df_sk_ak$geo_point_2d, ","))
+
+
+View(add_df_sk_ak)
+
+
+kreis_average_df <- function(data, start_year, end_year, variables) {
+  
+  data$periodEndDate <- as.Date(data$periodEndDate, format = "%Y-%m-%d")
+  data$year <- as.numeric(format(data$periodEndDate, "%Y"))
+  
+  # Subset the data based on the provided date range
+  subset_data <- data %>%
+    filter(year >= start_year & year <= end_year)
+  
+  # Group the data by kreiscode and calculate the averages
+  result <- subset_data %>%
+    group_by(ao_kreis) %>%
+    summarise(across(all_of(variables), ~ mean(.x, na.rm = TRUE)))
+  
+  return(result)
+}
+
+add_df_sk_ak$lat <- as.numeric(add_df_sk_ak$lat)
+add_df_sk_ak$lon <- as.numeric(add_df_sk_ak$lon) 
+
+
+# Generate data frame for average values based on kreis code
+variables <- c("var_132214", "lat", "lon") #"var_133175","var_133176", , "var_133171", "var_138553" var_133176 var_133116
+kreis_average_df1 <- kreis_average_df(add_df_sk_ak, start_year = 2000, end_year = 2020, variables = variables)
+View(kreis_average_df1)
+
+# Create a continuous color scale from blue to yellow to red
+color_scale <- colorRampPalette(c("red", "yellow", "green"))
+
+# Assign colors based on the continuous scale for var_133116
+color_values <- color_scale(5)[as.numeric(cut(kreis_average_df1$var_132214, breaks = 5))]
+
+tapply(kreis_average_df1$var_132214, as.numeric(cut(kreis_average_df1$var_132214, breaks = 5)), function(x) mean(x))
+
+# Plot with the continuous color scale
+plot(kreis_average_df1$lon, kreis_average_df1$lat,
+     col = color_values, 
+     pch = 16,
+     lwd = 2,
+     xlab = "Longitude", 
+     ylab = "Latitude", 
+     main = "Heatmap with Continuous Color Scale for var_133116")
+
+# Optionally, add a legend for color scale
+legend("topright", legend = c("Low", "High"), fill = color_scale(2), title = "var_133116")
+
+
+
+# some other stuff
+kreis_average_df1 <- read.csv("kreis_average_df1.csv")
+write.csv(kreis_average_df1, "kreis_average_df1.csv", row.names = FALSE)
+
+
+# kreis codes with N/A across all varoables variables
+missing_kreis <- setdiff(plz_mapping$ao_kreis, kreis_average_df1$ao_kreis)
+
+filtered_plz_mapping <- plz_mapping %>%
+  filter(ao_kreis %in% missing_kreis)
+print(filtered_plz_mapping)

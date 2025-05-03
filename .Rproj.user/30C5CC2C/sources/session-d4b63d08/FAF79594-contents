@@ -1,0 +1,37 @@
+# Compute efficiency ranks for each bank within each year
+ranked_data <- sparkasse_data %>%
+  mutate(
+    # Calculate log-transformed variables
+    ln_C = log(`_193800` + `_193900` + `_193400`),         # Total costs (C)
+    ln_y1_z1 = log(`_190000` / `_192300`),                 # Total loans normalized by equity (y1/z1)
+    ln_y2_z1 = log(`_190300` / `_192300`),                 # Other earning assets normalized by equity (y2/z1)
+    ln_y3_z1 = log(`_191300` / `_192300`),                 # Total deposits normalized by equity (y3/z1)
+    ln_w1_w2 = log((`_193800` / `_190900`) / (`_193200` / `_191300`)) # Input price ratio w1/w2
+  ) %>%
+  group_by(closdate_year) %>%
+  group_modify(~ {
+    # Fit the translog cost function for each year
+    model <- lm(
+      ln_C ~
+        log(`_193200` / `_191300` * `_192300`) +  # w2 * z1
+        ln_y1_z1 + ln_y2_z1 + ln_y3_z1 +
+        I(ln_y1_z1^2) + I(ln_y2_z1^2) + I(ln_y3_z1^2) +
+        ln_y1_z1:ln_y2_z1 + ln_y1_z1:ln_y3_z1 + ln_y2_z1:ln_y3_z1 +
+        ln_w1_w2 + I(ln_w1_w2^2) +
+        ln_y1_z1:ln_w1_w2 + ln_y2_z1:ln_w1_w2 + ln_y3_z1:ln_w1_w2,
+      data = .x
+    )
+    
+    # Extract residuals and calculate efficiency ranks
+    .x$residuals <- residuals(model)
+    .x <- .x %>%
+      mutate(
+        rank = rank(-residuals, ties.method = "min"),  # Higher residual -> lower efficiency
+        efficiency_rank = (rank - 1) / (n() - 1)      # Normalize rank to [0, 1]
+      )
+    
+    return(.x)
+  })
+
+# Ungroup the data
+ranked_data <- ungroup(ranked_data)
