@@ -19,3 +19,6 @@ xtabond2 GDP_Growth L.GDP_Growth ROE share_non_interest_inc CPI_pct_change ln_to
 
 // Z score
 xtabond2 GDP_Growth L.GDP_Growth Z_score share_non_interest_inc CPI_pct_change Population equity_ratio loan_per_gdp former_east i.Year, gmm(L.Z_score, lag(2 10)) iv(share_non_interest_inc CPI_pct_change Population equity_ratio loan_per_gdp former_east i.Year) twostep robust small
+
+// EMPL model
+xtabond2 growth_rate L.growth_rate ROA share_non_interest_inc CPI_pct_change Population equity_ratio ln_total_assets loan_per_gdp former_east i.Year, gmm(L.ROA, lag(2 10)) iv(share_non_interest_inc CPI_pct_change Population equity_ratio ln_total_assets loan_per_gdp former_east i.Year) twostep robust small
